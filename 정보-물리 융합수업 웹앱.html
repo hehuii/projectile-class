@@ -93,9 +93,6 @@ textarea.txt{font-family:inherit;font-size:14px;padding:10px 12px;border:1px sol
   border-radius:12px;padding:12px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
 .runbar .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .runbar .ttl{font-weight:700;font-size:15px;flex:1}
-.runbar .clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:17px;color:var(--brand);
-  background:#eef3ff;padding:3px 11px;border-radius:8px}
-.runbar .clock.low{color:#fff;background:var(--bad)}
 .pbar{height:8px;background:#eef2f9;border-radius:99px;margin-top:10px;overflow:hidden}
 .pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-2));
   border-radius:99px;transition:width .35s}
@@ -120,7 +117,6 @@ textarea.txt{font-family:inherit;font-size:14px;padding:10px 12px;border:1px sol
 .rep{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;font-size:14px}
 .rep h4{margin:14px 0 4px;font-size:14px;color:var(--brand)}
 .rep .a{background:#f7f9fd;border-radius:7px;padding:8px 11px;white-space:pre-wrap}
-.timer{font-variant-numeric:tabular-nums;font-weight:700;font-size:20px;color:var(--brand)}
 footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
 @media print{header,.runbar,.navbtns,.noprint{display:none!important}
   section.tab{display:block!important}.card{break-inside:avoid;box-shadow:none}}
@@ -394,17 +390,6 @@ footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);fon
     <h3 id="tRubricH">채점 루브릭</h3>
     <div id="tRubric"></div>
 
-    <h3>수업 타이머</h3>
-    <div class="noprint">
-      <span class="timer" id="tdisp">00:00</span>
-      <button class="btn ghost" data-min="5">5분</button>
-      <button class="btn ghost" data-min="10">10분</button>
-      <button class="btn ghost" data-min="15">15분</button>
-      <button class="btn ghost" data-min="50">50분</button>
-      <button class="btn" id="tstart">시작/정지</button>
-      <button class="btn ghost" id="tclear">리셋</button>
-    </div>
-
     <h3>저작권 및 출처</h3>
     <div class="box phy">
       <b>이 수업앱의 이용 조건</b><br>
@@ -469,6 +454,28 @@ footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);fon
 /* ========== 공용 ========== */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
+
+/* ========== 아래 첨자 표시 ==========
+   화면 글자 속 유니코드 첨자 숫자(v₀, h₀, log₂ …)를 진짜 아래 첨자(<sub>)로 바꾼다.
+   새로 그려지는 화면(차시 단계, 활동 보고서 등)도 MutationObserver 로 따라가며 바꾼다. 코드 편집기·코드 글꼴 안은 건드리지 않는다. */
+const SUB_DIG='₀₁₂₃₄₅₆₇₈₉';
+function fixSubs(root){
+  if(!root) return;
+  const skip=/^(SCRIPT|STYLE|TEXTAREA|CODE|PRE|SUB|OPTION)$/;
+  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode:n=>{ const p=n.parentNode;
+    if(!p||skip.test(p.nodeName)||(p.closest&&p.closest('code,pre,textarea'))) return NodeFilter.FILTER_REJECT;
+    return /[₀-₉]/.test(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP; }});
+  const list=[]; while(w.nextNode()) list.push(w.currentNode);
+  list.forEach(n=>{ const s=n.nodeValue, re=/[₀-₉]+/g, frag=document.createDocumentFragment(); let m, last=0;
+    while((m=re.exec(s))){ if(m.index>last) frag.appendChild(document.createTextNode(s.slice(last,m.index)));
+      const sb=document.createElement('sub'); sb.textContent=[...m[0]].map(ch=>SUB_DIG.indexOf(ch)).join(''); frag.appendChild(sb); last=m.index+m[0].length; }
+    if(last<s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+    if(n.parentNode) n.parentNode.replaceChild(frag,n); });
+}
+new MutationObserver(ms=>ms.forEach(m=>{ if(m.type==='characterData'){ if(m.target.parentNode) fixSubs(m.target.parentNode); return; }
+  m.addedNodes.forEach(n=>{ if(n.nodeType===1) fixSubs(n); else if(n.nodeType===3&&n.parentNode) fixSubs(n.parentNode); }); }))
+  .observe(document.body,{childList:true,subtree:true,characterData:true});
+fixSubs(document.body);
 const fmt = (n,d=1) => Number(n).toFixed(d);
 const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
 
@@ -514,8 +521,12 @@ function bestAngle(v0,k){ let b=[0,0]; for(let a=1;a<=89;a++){ const r=simulate(
 
 /* ========== 그리기 ========== */
 function fit(cv){
-  const dpr=window.devicePixelRatio||1, w=cv.clientWidth||600, h=+cv.getAttribute('height')||300;
-  cv.width=w*dpr; cv.height=h*dpr; const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  // 화면에 보이는 높이는 처음 정한 height 값으로 고정한다 — 고해상도(배율 125% 등) 화면에서 다시 그릴 때마다 캔버스가 커지지 않게
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth||640, a=+cv.getAttribute('height')||300;
+  if(!cv.dataset.h||a!==+cv.dataset.hp) cv.dataset.h=a;
+  const h=+cv.dataset.h; cv.style.height=h+'px';
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); cv.dataset.hp=cv.height;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
   return {ctx,w,h};
 }
 function niceStep(m){ const raw=m/6,p=Math.pow(10,Math.floor(Math.log10(raw))),n=raw/p;
@@ -2435,7 +2446,7 @@ writeStep({id:'8-4', min:10, title:'탐구 결론 쓰기', minLen:120, tall:150,
      <li><b>물리적으로 왜 그런가</b> (힘·에너지·보존량 중 하나로 설명)</li>
      <li><b>이 결론의 한계</b> (모형이 빠뜨린 것)</li></ol>`)); },
   mission:'<b>미션</b> — 위 네 가지를 담아 <b>120자 이상</b>으로 결론을 작성하세요.',
-  ph:'나는 발사 높이가 최적각에 미치는 영향을 탐구했다. h₀=0일 때 최적각은 __도였고, h₀=20m일 때는 __도로 낮아졌다. 그 이유는...',
+  ph:'나는 발사 높이가 최적각에 미치는 영향을 탐구했다. 발사 높이가 0 m일 때 최적각은 __도였고, 20 m일 때는 __도로 낮아졌다. 그 이유는...',
   ok:'훌륭합니다. 활동 보고서에 그대로 실립니다. 발표 때 이 내용을 2분으로 요약해 말하면 됩니다.'}),
 
 {id:'8-5', min:5, title:'발표 준비', build(c,done){
@@ -2958,7 +2969,7 @@ writeStep({id:'i3-4', min:12, title:'버그 리포트 작성하기', minLen:100,
      <li><b>수정</b> : 어떻게 고쳤는가</li>
      <li><b>확인</b> : 무엇으로 고쳐졌음을 확인했는가</li></ol>`)); },
   mission:'<b>미션</b> — 앞에서 고친 <b>버그 3개 중 하나</b>를 골라 위 5개 항목을 갖춘 버그 리포트를 <b>100자 이상</b>으로 작성하세요.',
-  ph:'증상: 사거리가 3000m가 넘게 나옴.\n재현: v₀=20, 각도 45도, dt=0.002.\n원인: 위치 갱신에서 dt를 곱하지 않아 1초치 이동을 매 스텝 적용함.\n수정: x = x + vx*dt 로 변경.\n확인: 사거리 40.81m로 공식값 40.82m와 일치.',
+  ph:'증상: 사거리가 3000m가 넘게 나옴.\n재현: 처음 속도 20 m/s, 각도 45도, dt=0.002.\n원인: 위치 갱신에서 dt를 곱하지 않아 1초치 이동을 매 스텝 적용함.\n수정: x = x + vx*dt 로 변경.\n확인: 사거리 40.81m로 공식값 40.82m와 일치.',
   ok:'훌륭합니다. 이것이 실제 개발 현장에서 오가는 문서의 형태입니다. 활동 보고서에 실립니다.'}),
 ]},
 
@@ -4008,7 +4019,6 @@ function renderCourseBox(){
 }
 
 /* ========== 차시 렌더러 ========== */
-let clockTimer=null, clockLeft=50*60, clockRun=false;
 function renderLesson(L){
   const lesson=curSet()[L]; const host=$('#'+L); host.innerHTML='';
   if(!lesson){ host.innerHTML='<div class="card">이 과정에는 해당 차시가 없습니다.</div>'; return; }
@@ -4019,24 +4029,11 @@ function renderLesson(L){
   const bar=el('div','runbar');
   const top=el('div','top');
   const ttl=el('div','ttl',lesson.title);
-  const clock=el('div','clock','50:00');
-  const cbtn=el('button','btn ghost','수업 타이머 시작');
-  top.appendChild(ttl); top.appendChild(clock); top.appendChild(cbtn);
+  top.appendChild(ttl);
   bar.appendChild(top);
   const pb=el('div','pbar','<i style="width:0"></i>'); bar.appendChild(pb);
   const dots=el('div','dots'); bar.appendChild(dots);
   host.appendChild(bar);
-
-  cbtn.onclick=()=>{
-    clockRun=!clockRun; cbtn.textContent = clockRun?'일시정지':'수업 타이머 시작';
-    if(clockTimer) clearInterval(clockTimer);
-    if(clockRun) clockTimer=setInterval(()=>{ if(clockLeft>0) clockLeft--; paintClock(); },1000);
-  };
-  function paintClock(){
-    const m=String(Math.floor(clockLeft/60)).padStart(2,'0'), s=String(clockLeft%60).padStart(2,'0');
-    clock.textContent=m+':'+s; clock.classList.toggle('low', clockLeft<=300);
-  }
-  paintClock();
 
   const card=el('div','card'); host.appendChild(card);
 
@@ -4141,15 +4138,6 @@ function buildReport(){
   b.innerHTML=h;
 }
 $('#mkrep').onclick=buildReport;
-
-/* ========== 교사 타이머 ========== */
-let tSec=0,tRun=null;
-function tShow(){ $('#tdisp').textContent=String(Math.floor(tSec/60)).padStart(2,'0')+':'+String(tSec%60).padStart(2,'0'); }
-$$('button[data-min]').forEach(b=> b.onclick=()=>{ tSec=+b.dataset.min*60; tShow(); });
-$('#tstart').onclick=()=>{ if(tRun){clearInterval(tRun);tRun=null;return;}
-  tRun=setInterval(()=>{ if(tSec<=0){clearInterval(tRun);tRun=null;alert('⏰ 시간이 끝났습니다!');return;} tSec--;tShow(); },1000); };
-$('#tclear').onclick=()=>{ clearInterval(tRun);tRun=null;tSec=0;tShow(); };
-tShow();
 
 /* ========== 시작 ========== */
 renderCoursePick();
