@@ -750,11 +750,11 @@ L1:{ title:'1차시 · 현상을 관찰하고 알고리즘 설계하기', steps:
 {id:'1-6', min:10, title:'알고리즘 순서 맞추기', build(c, done){
   c.appendChild(el('div','mission','<b>미션</b> — 아래 6줄은 순서가 뒤섞여 있습니다. ▲▼ 버튼으로 올바른 알고리즘 순서를 만든 뒤 [채점하기]를 누르세요.'));
   const ORDER=[
-    '① 초기값 설정: x=0, y=0, vx=v0·cosθ, vy=v0·sinθ',
+    '① 초기값 설정: x = 0, y = 0, v<sub>x</sub> = v<sub>0</sub>·cosθ, v<sub>y</sub> = v<sub>0</sub>·sinθ',
     '② y ≥ 0 인 동안 아래를 반복한다',
     '③ 지금 속도로 합력(중력 + 공기저항)을 구하고, 가속도 a = F/m 를 계산한다',
-    '④ 속도 갱신: vx ← vx + ax·Δt, vy ← vy + ay·Δt',
-    '⑤ 위치 갱신: x ← x + vx·Δt, y ← y + vy·Δt',
+    '④ 속도 갱신: v<sub>x</sub> ← v<sub>x</sub> + a<sub>x</sub>·Δt, v<sub>y</sub> ← v<sub>y</sub> + a<sub>y</sub>·Δt',
+    '⑤ 위치 갱신: x ← x + v<sub>x</sub>·Δt, y ← y + v<sub>y</sub>·Δt',
     '⑥ 반복이 끝나면 최종 x를 사거리로 출력한다'];
   let cur = S.ans['1-6order'] ? JSON.parse(S.ans['1-6order']) : null;
   if(cur && [...cur].sort().join()!==[...ORDER].sort().join()) cur=null;   // 문장이 바뀌기 전에 저장된 순서는 새로 섞는다
@@ -2529,10 +2529,10 @@ L1:{ title:'1차시 · 문제 분해와 추상화 — 현실을 계산 가능한
 {id:'i1-2', min:12, title:'변수 분류하기 — 입력 / 상태 / 출력', build(c,done){
   c.appendChild(el('div','mission','<b>미션</b> — 아래 값들을 <b>입력·상태·출력</b> 중 알맞은 곳으로 분류하세요. 버튼을 눌러 바꿀 수 있습니다.'));
   const ITEMS=[
-    {n:'v0 (던지는 속도)', a:'입력'},
+    {n:'v<sub>0</sub> (던지는 속도)', a:'입력'},
     {n:'angleDeg (던지는 각도)', a:'입력'},
     {n:'dt (계산 간격)', a:'입력'},
-    {n:'vx, vy (현재 속도 성분)', a:'상태'},
+    {n:'v<sub>x</sub>, v<sub>y</sub> (현재 속도 성분)', a:'상태'},
     {n:'x, y (현재 위치)', a:'상태'},
     {n:'pts (지금까지의 궤적 배열)', a:'상태'},
     {n:'range (최종 수평 도달거리)', a:'출력'},
@@ -2575,13 +2575,14 @@ L1:{ title:'1차시 · 문제 분해와 추상화 — 현실을 계산 가능한
 {id:'i1-3', min:12, title:'의사코드 설계하기', build(c,done){
   c.appendChild(el('div','mission','<b>미션</b> — 6줄이 뒤섞여 있습니다. ▲▼로 올바른 순서를 만드세요.'));
   const ORDER=[
-    '① 초기화 : x=0, y=0, vx=v0·cosθ, vy=v0·sinθ',
+    '① 초기화 : x = 0, y = 0, v<sub>x</sub> = v<sub>0</sub>·cosθ, v<sub>y</sub> = v<sub>0</sub>·sinθ',
     '② 반복 조건 : y ≥ 0 인 동안',
-    '③ 가속도 계산 : ax = 0, ay = −g',
-    '④ 상태 갱신(속도) : vx += ax·dt, vy += ay·dt',
-    '⑤ 상태 갱신(위치) : x += vx·dt, y += vy·dt',
+    '③ 가속도 계산 : a<sub>x</sub> = 0, a<sub>y</sub> = −g',
+    '④ 상태 갱신(속도) : v<sub>x</sub> += a<sub>x</sub>·dt, v<sub>y</sub> += a<sub>y</sub>·dt',
+    '⑤ 상태 갱신(위치) : x += v<sub>x</sub>·dt, y += v<sub>y</sub>·dt',
     '⑥ 반복 종료 후 : x를 결과로 반환'];
   let cur = S.ans['i1-3o'] ? JSON.parse(S.ans['i1-3o']) : null;
+  if(cur && [...cur].sort().join()!==[...ORDER].sort().join()) cur=null;   // 문장이 바뀌기 전에 저장된 순서는 새로 섞는다
   if(!cur){ cur=[...ORDER]; do{ cur.sort(()=>Math.random()-.5); }while(cur.join()===ORDER.join()); }
   const ul=el('ul','steps'); c.appendChild(ul);
   function draw(){ ul.innerHTML='';
@@ -2957,7 +2958,7 @@ writeStep({id:'i3-4', min:12, title:'버그 리포트 작성하기', minLen:100,
      <li><b>수정</b> : 어떻게 고쳤는가</li>
      <li><b>확인</b> : 무엇으로 고쳐졌음을 확인했는가</li></ol>`)); },
   mission:'<b>미션</b> — 앞에서 고친 <b>버그 3개 중 하나</b>를 골라 위 5개 항목을 갖춘 버그 리포트를 <b>100자 이상</b>으로 작성하세요.',
-  ph:'증상: 사거리가 3000m가 넘게 나옴.\n재현: v0=20, 각도 45도, dt=0.002.\n원인: 위치 갱신에서 dt를 곱하지 않아 1초치 이동을 매 스텝 적용함.\n수정: x = x + vx*dt 로 변경.\n확인: 사거리 40.81m로 공식값 40.82m와 일치.',
+  ph:'증상: 사거리가 3000m가 넘게 나옴.\n재현: v₀=20, 각도 45도, dt=0.002.\n원인: 위치 갱신에서 dt를 곱하지 않아 1초치 이동을 매 스텝 적용함.\n수정: x = x + vx*dt 로 변경.\n확인: 사거리 40.81m로 공식값 40.82m와 일치.',
   ok:'훌륭합니다. 이것이 실제 개발 현장에서 오가는 문서의 형태입니다. 활동 보고서에 실립니다.'}),
 ]},
 
