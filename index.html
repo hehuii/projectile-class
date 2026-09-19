@@ -102,7 +102,7 @@ textarea.txt{font-family:inherit;font-size:14px;padding:10px 12px;border:1px sol
 .dots{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
 .dots button{border:1px solid var(--line);background:#f7f9fd;color:var(--muted);width:30px;height:30px;
   border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.dots button.done{background:#e8f7ee;border-color:#9ad9b5;color:#136c3d}
+.dots button.done{background:#e8f7ee;border-color:#9ad9b5;color:#136c3d} .dots button.skip{background:#fff4e5;border-color:#f3c48b;color:#b45309}
 .dots button.cur{background:var(--brand);border-color:var(--brand);color:#fff}
 .dots button.lock{opacity:.45;cursor:not-allowed}
 .stephead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
@@ -162,7 +162,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);fon
     <div class="grid g3">
       <div class="box">
         <b>① 단계별로 진행</b><br>
-        차시마다 4~8개의 단계가 있습니다. 각 단계에는 <b>해야 할 일</b>이 하나씩 있고, 그것을 해내야 다음 단계로 넘어갑니다.
+        차시마다 4~8개의 단계가 있습니다. 각 단계에는 <b>해야 할 일</b>이 하나씩 있습니다. 답할 때마다 <b>정답인지 오답인지</b> 바로 알려 주며, 맞히지 못해도 다음 단계로 넘어갈 수 있습니다.
       </div>
       <div class="box phy">
         <b>② 직접 조작하고 입력</b><br>
@@ -368,10 +368,10 @@ footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);fon
     <div id="tFlow"></div>
 
     <div class="box warn">
-      <b>진행이 느린 학생 대응</b> — 아래 [모든 단계 잠금 해제]를 켜면 통과하지 못한 단계도 건너뛸 수 있습니다.
+      <b>진행 방식</b> — 학생은 답할 때마다 정답·오답을 바로 확인하고, 맞히지 못한 단계도 확인 창을 거쳐 다음 단계로 넘어갈 수 있습니다(진행 점이 주황색, 보고서에 △로 표시). 아래 [모든 단계 잠금 해제]를 켜면 확인 창 없이 넘어가고 진행 점으로 아무 단계나 열 수 있습니다.
       수업 종료 10분 전, 아직 디버깅 트랙(물리 2-4 · 정보 i3-2)에 머무는 학생이 많으면 켜 주세요.
     </div>
-    <label class="chk noprint"><input type="checkbox" id="unlock"><span><b>모든 단계 잠금 해제</b> (통과 없이 다음 단계로 이동 허용)</span></label>
+    <label class="chk noprint"><input type="checkbox" id="unlock"><span><b>모든 단계 잠금 해제</b> (확인 창 없이 이동, 아무 단계나 열기)</span></label>
 
     <h3>예상 오개념과 대응 발문</h3>
     <div id="tMiscon"></div>
@@ -892,7 +892,7 @@ codeStep({id:'2-3', min:6, title:'이론값과 맞춰보기', level:'C',
   c.appendChild(el('div','box bad',
     `<b>실제 프로그래밍의 절반은 오류를 고치는 일입니다.</b><br>
      아래에 <b>세 개의 고장난 코드</b>가 있습니다. 각각 <b>증상</b>이 다릅니다.
-     증상을 보고 원인을 찾아 고치세요. 세 개를 모두 고쳐야 다음 단계로 넘어갑니다.`));
+     증상을 보고 원인을 찾아 고치세요. 세 개를 모두 고치는 것이 목표입니다.`));
   const BUGS=[
     {n:1, sym:'공이 <b>직선으로 끝없이</b> 날아갑니다. 땅에 닿지도 않습니다.',
      hint:'가속도 ax, ay는 계산했는데, 그것을 <b>속도에 반영</b>하는 두 줄이 사라졌습니다.',
@@ -3948,9 +3948,9 @@ function renderLesson(L){
     dots.innerHTML='';
     lesson.steps.forEach((s,i)=>{
       const b=el('button',null,String(i+1));
-      if(S.done[s.id]) b.classList.add('done');
+      if(S.done[s.id]) b.classList.add('done'); else if(S.skip&&S.skip[s.id]) b.classList.add('skip');
       if(i===idx) b.classList.add('cur');
-      const reachable = S.unlock || i===0 || S.done[lesson.steps[i-1].id] || i<=idx;
+      const reachable = S.unlock || i===0 || S.done[lesson.steps[i-1].id] || (S.skip&&S.skip[lesson.steps[i-1].id]) || i<=idx;
       if(!reachable) b.classList.add('lock');
       b.title = s.title;
       b.onclick=()=>{ if(!reachable){ alert('이전 단계를 먼저 완료해야 합니다.'); return; } idx=i; S.pos[PK]=i; save(); show(); };
@@ -3978,8 +3978,10 @@ function renderLesson(L){
     const next=el('button','btn big', idx===lesson.steps.length-1?'차시 완료':'확인하고 다음 단계 →');
     next.onclick=()=>{
       const r=s.check();
-      if(!r.ok && !S.unlock){ msg.innerHTML='⚠ '+r.msg; return; }
-      S.done[s.id]=true; save();
+      if(!r.ok && !S.unlock){ msg.innerHTML='⚠ '+r.msg;
+        if(!confirm('⚠ '+String(r.msg).replace(/<[^>]+>/g,'')+'\n\n정답을 맞히지 못했어도 다음 단계로 넘어갈 수 있습니다. 넘어갈까요?')) return;
+        S.skip=S.skip||{}; S.skip[s.id]=true; save(); }
+      else { S.done[s.id]=true; save(); }
       if(idx<lesson.steps.length-1){ idx++; S.pos[PK]=idx; save(); show(); window.scrollTo({top:0,behavior:'smooth'}); }
       else { const n=+L[1]; const nx = (n<8 && curSet()['L'+(n+1)]) ? 'L'+(n+1) : 'report';
         alert('차시를 완료했습니다! 수고하셨습니다.'); go(nx); }
@@ -4007,7 +4009,7 @@ function buildReport(){
     const les=set[L];
     h+=`<h4>${les.title}</h4><div class="a">`;
     les.steps.forEach((s,i)=>{
-      const mark=S.done[s.id]?'☑':'☐';
+      const mark=S.done[s.id]?'☑':(S.skip&&S.skip[s.id])?'△':'☐';
       let v=A[s.id];
       const sub=A[s.id+'a'];
       let line;
