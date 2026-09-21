@@ -149,6 +149,23 @@ table.dash .l{text-align:left}
 table.dash tr.row{cursor:pointer} table.dash tr.row:hover{background:#f6f9ff} table.dash tr.sel{background:#eef3ff}
 .sc{display:block;font-weight:800;font-size:14px} .sc small{display:block;font-weight:400;color:var(--muted);font-size:11px}
 .hi{color:var(--good)} .mid{color:#b96a12} .lo{color:var(--bad)}
+/* ── 확인 · 알림 창 (브라우저 기본 창이 막힌 곳에서도 쓰려고 직접 그린다) ── */
+.modalbg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal{background:#fff;border-radius:14px;padding:20px 22px;max-width:540px;box-shadow:0 10px 40px rgba(15,35,70,.3);font-size:14.5px;line-height:1.7}
+.modal .mbtn{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#16202f;color:#fff;padding:12px 18px;border-radius:12px;
+  font-size:14px;line-height:1.6;z-index:120;max-width:min(560px,92vw);box-shadow:0 8px 30px rgba(15,35,70,.35);transition:opacity .4s;cursor:pointer}
+.toast.ok{background:#146c43} .toast.bad{background:#a3242f}
+/* ── 교사 모드 : 학생 화면에는 [교육과정]·[교사 자료] 탭이 보이지 않는다 ── */
+body:not(.tmode) #nav button[data-tab="curr"], body:not(.tmode) #nav button[data-tab="teacher"]{display:none}
+body:not(.tmode) section#curr, body:not(.tmode) section#teacher{display:none!important}
+.logingrid{display:grid;grid-template-columns:minmax(240px,1fr) 2.1fr;gap:16px;align-items:start}
+.logingrid>div{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.logingrid .tpanel{background:#fffbeb;border-color:#f3c48b}
+.logingrid h3{margin:0 0 6px;font-size:16px;color:var(--ink)}
+.logingrid .sub{margin-bottom:8px}
+@media(max-width:760px){.logingrid{grid-template-columns:1fr}.logingrid .tpanel{order:2}}
+header .who .tbadge{background:#fde68a;color:#7c2d12;border-radius:7px;padding:2px 8px;font-weight:700;font-size:12px}
 footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
 @media print{header,.runbar,.navbtns,.noprint{display:none!important}
   section.tab{display:block!important}.card{break-inside:avoid;box-shadow:none}}
@@ -242,10 +259,10 @@ footer{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);fon
 <section class="tab" id="report">
   <div class="card">
     <h2>활동 보고서</h2>
-    <p class="sub">여러분이 여덟 차시 동안 입력한 답과 점수입니다. 차시마다 <b>내 답과 정답</b>을 함께 보여 줍니다. [결과 파일 저장]으로 선생님께 제출하거나 인쇄하세요.</p>
+    <p class="sub">여덟 차시 점수와 내가 쓴 글을 한눈에 보여 줍니다. 문항마다 <b>내 답과 정답</b>을 보려면 아래 [문항별로 자세히 보기]를 누르세요. [결과 파일 저장]으로 선생님께 제출하거나 인쇄하세요.</p>
     <div style="margin-bottom:12px" class="noprint">
       <button class="btn" id="mkrep">보고서 새로 만들기</button>
-      <button class="btn teal" onclick="exportResult()">📤 결과 파일 저장</button>
+      <button class="btn teal" id="expBtn" onclick="exportResult()">📤 결과 파일 저장</button>
       <button class="btn ghost" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
     </div>
     <div id="repBody" class="rep">[보고서 새로 만들기]를 누르세요.</div>
@@ -536,6 +553,27 @@ fixSubs(document.body);
 const fmt = (n,d=1) => Number(n).toFixed(d);
 const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
 
+/* ========== 확인 · 알림 창 ==========
+   앱 안의 브라우저 등에서는 브라우저 기본 창(confirm/alert)이 막혀 늘 '취소'가 된다. 그래서 직접 그린다.
+   ask(글, 예를 눌렀을 때 할 일) · say(글) */
+function ask(msg, onYes, opt){
+  opt=opt||{};
+  const bg=el('div','modalbg'), c=el('div','modal');
+  c.innerHTML=`<div>${String(msg).replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>`;
+  const row=el('div','mbtn'), no=el('button','btn ghost',opt.no||'취소'), yes=el('button','btn'+(opt.danger?' warn':''),opt.yes||'확인');
+  row.append(no,yes); c.appendChild(row); bg.appendChild(c); document.body.appendChild(bg);
+  const close=()=>{ bg.remove(); document.removeEventListener('keydown',key); opt.onNo&&opt.onNo(); };
+  function key(e){ if(e.key==='Escape') close(); else if(e.key==='Enter'){ bg.remove(); document.removeEventListener('keydown',key); onYes&&onYes(); } }
+  no.onclick=close; bg.onclick=e=>{ if(e.target===bg) close(); };
+  yes.onclick=()=>{ bg.remove(); document.removeEventListener('keydown',key); onYes&&onYes(); };
+  document.addEventListener('keydown',key); setTimeout(()=>yes.focus(),0);
+}
+function say(msg, kind){
+  const t=el('div','toast'+(kind?' '+kind:''), String(msg).replace(/</g,'&lt;').replace(/\n/g,'<br>'));
+  document.body.appendChild(t); t.onclick=()=>t.remove();
+  setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),450); }, Math.min(9000, 2600+String(msg).length*45));
+}
+
 /* ========== 상태 저장 · 학번 로그인 ==========
    학생마다 따로 저장한다 : localStorage['ipc_state_v2@학번']. 지금 접속한 학번은 sessionStorage 에 둔다 (브라우저 창을 닫으면 로그아웃).
    예전 판(학번 없이 'ipc_state_v2' 하나에 저장)의 기록은 처음 로그인할 때 옮겨 올지 묻는다. */
@@ -553,29 +591,37 @@ let S=blankS();
 { const sid=SS.get(CUR), u=sid&&readUser(sid); if(u) S=u; }
 function save(){ if(!S.sid) return; S.at=Date.now(); LS.set(UKEY+S.sid, JSON.stringify(S)); }
 const loggedIn=()=>!!S.sid;
-function login(sid, name){
+function login(sid, name, done){
   sid=String(sid).trim(); name=String(name).trim().replace(/\s+/g,' ');
   if(!sid) return {err:'학번을 입력하세요.', f:1};
   if(!/^[0-9A-Za-z가-힣_-]{1,12}$/.test(sid)) return {err:'학번은 띄어쓰기 없이 12자 이내로 입력하세요. (예: 20315)', f:1};
   if(!name) return {err:'이름을 입력하세요.', f:2};
-  let u=readUser(sid);
-  if(u&&u.name&&u.name!==name&&!confirm(`학번 ${sid} 에는 '${u.name}' 이름으로 된 기록이 있습니다.\n본인의 기록이 맞으면 [확인]을 누르세요. (이름을 '${name}'(으)로 바꿉니다)`)) return {cancel:true};
-  if(!u){ u=blankS(); u.course=S.course||'phys';
-    const old=LS.get(KEY);                              // 학번 없이 저장된 예전 판 기록
-    if(old){ try{ const o=JSON.parse(old), n=Object.keys(o.done||{}).length;
-      if(n&&confirm(`이 컴퓨터에 학번 없이 저장된 예전 기록이 있습니다 (이름 : ${o.name||'없음'}, 완료 ${n}단계).\n이 기록을 ${sid} ${name} 학생의 기록으로 옮길까요?`)){
-        Object.assign(u,{course:o.course||u.course, pos:o.pos||{}, done:o.done||{}, ans:o.ans||{}, skip:o.skip||{}}); LS.del(KEY); } }catch(e){} } }
-  u.sid=sid; u.name=name; S=u; SS.set(CUR,sid); save(); return {};
+  const u0=readUser(sid);
+  const go2=()=>{ let u=u0;
+    if(!u){ u=blankS(); u.course=S.course||'phys'; }
+    u.sid=sid; u.name=name; S=u; SS.set(CUR,sid); save(); done&&done(); };
+  const old=!u0?jparse(LS.get(KEY),null):null;          // 학번 없이 저장된 예전 판 기록
+  const oldN=old?Object.keys(old.done||{}).length:0;
+  const step2=()=>{ if(!oldN) return go2();
+    ask(`이 컴퓨터에 학번 없이 저장된 예전 기록이 있습니다 (이름 : ${old.name||'없음'}, 완료 ${oldN}단계).\n이 기록을 ${sid} ${name} 학생의 기록으로 옮길까요?`,
+      ()=>{ go2(); Object.assign(S,{course:old.course||S.course, pos:old.pos||{}, done:old.done||{}, ans:old.ans||{}, skip:old.skip||{}}); LS.del(KEY); save(); refreshAll(); },
+      {yes:'옮기기', no:'새로 시작', onNo:go2}); };
+  if(u0&&u0.name&&u0.name!==name)
+    ask(`학번 ${sid} 에는 '${u0.name}' 이름으로 된 기록이 있습니다.\n본인의 기록이 맞으면 [이어서 하기]를 누르세요. (이름을 '${name}'(으)로 바꿉니다)`,
+      go2, {yes:'이어서 하기'});
+  else if(oldN) step2();
+  else go2();
+  return {};
 }
-function logout(){ save(); SS.del(CUR); location.reload(); }
-const LOGOUT_Q='로그아웃할까요?\n기록은 이 컴퓨터에 남아 있어, 같은 학번과 이름으로 다시 들어오면 이어서 할 수 있습니다.';
-$('#resetAll').onclick = ()=>{ if(!loggedIn()){ alert('먼저 학번과 이름을 입력하세요.'); return; }
-  if(confirm(`${S.sid} ${S.name} 학생의 진행 기록과 답안, 점수를 모두 지웁니다. 계속할까요?`)){
-    const {sid,name,course}=S; S=Object.assign(blankS(),{sid,name,course}); save(); location.reload(); } };
+function logout(){ save(); SS.del(CUR); location.reload(); }   // 기록은 학번별로 남으므로 확인 창 없이 바로 나간다
+$('#resetAll').onclick = ()=>{ if(!loggedIn()){ say('먼저 학번과 이름을 입력하세요.','bad'); return; }
+  ask(`${S.sid} ${S.name} 학생의 진행 기록과 답안, 점수를 모두 지웁니다. 계속할까요?`,
+    ()=>{ const {sid,name,course}=S; S=Object.assign(blankS(),{sid,name,course}); save(); location.reload(); }, {yes:'모두 지우기', danger:1}); };
 
 /* ========== 탭 ========== */
 let curL='L1';
 function go(t){
+  if((t==='curr'||t==='teacher')&&!teacherOK()) t='home';     // 교육과정 · 교사 자료는 교사 모드에서만 연다
   $$('#nav button').forEach(x=>x.classList.toggle('on', x.dataset.tab===t));
   $$('section.tab').forEach(s=>s.classList.toggle('on', s.id===t));
   if(/^L[1-8]$/.test(t)){ curL=t; renderLesson(t); }
@@ -2622,7 +2668,7 @@ L8:{ title:'8차시 · 나만의 탐구와 발표', steps:[
   row.appendChild(inp);
   const b=el('button','btn ghost','이 주제로');
   b.onclick=()=>{ if(inp.value.trim().length>5){ S.ans['8-2']=inp.value.trim(); save();
-    wrap.querySelectorAll('.opt').forEach(z=>z.classList.remove('sel')); alert('주제가 저장되었습니다.'); done(true); } };
+    wrap.querySelectorAll('.opt').forEach(z=>z.classList.remove('sel')); say('주제가 저장되었습니다.','ok'); done(true); } };
   row.appendChild(b); c.appendChild(row);
   if(S.ans['8-2']) done(true);
 }, check(){ return S.ans['8-2']?{ok:true}:{ok:false,msg:'탐구 주제를 정해야 합니다.'}; }},
@@ -3762,7 +3808,7 @@ L8:{ title:'8차시 · 프로젝트 — 설계·구현·검증·발표', steps:[
   inp.value=(S.ans['i8-2']&&!T.some(x=>x.t===S.ans['i8-2']))?S.ans['i8-2']:'';
   const b=el('button','btn ghost','이 주제로');
   b.onclick=()=>{ if(inp.value.trim().length>5){ S.ans['i8-2']=inp.value.trim(); save();
-    wrap.querySelectorAll('.opt').forEach(z=>z.classList.remove('sel')); alert('주제가 저장되었습니다.'); done(true); } };
+    wrap.querySelectorAll('.opt').forEach(z=>z.classList.remove('sel')); say('주제가 저장되었습니다.','ok'); done(true); } };
   row.appendChild(inp); row.appendChild(b); c.appendChild(row);
   if(S.ans['i8-2']) done(true);
 }, check(){ return S.ans['i8-2']?{ok:true}:{ok:false,msg:'프로젝트 주제를 정해야 합니다.'}; }},
@@ -4183,7 +4229,7 @@ function renderCourseBox(){
    공개  학생 화면은 답을 낸 문항만 정답을 보여 준다. 교사 결과 보기는 모두 보여 준다.
    ===================================================================== */
 function rec(id, parts, pass, msg){
-  if(!S.sid) return;
+  if(!S.sid&&!teacherOK()) return;                 // 교사 미리보기(학번 없음)는 이 창에서만 기록하고 저장하지 않는다
   S.gr=S.gr||{}; const g=S.gr[id]||(S.gr[id]={n:0,p:{}});
   g.n++; if(!g.t) g.t=Date.now();
   parts.forEach(([k,v,ok])=>{ if(v==null) return; v=String(v).trim(); if(v==='') return; v=v.slice(0,160);
@@ -4356,9 +4402,10 @@ const VIEW={}, FIN={};                            // 차시별 화면 'step' | '
 function renderLesson(L){
   const lesson=curSet()[L]; const host=$('#'+L); host.innerHTML='';
   if(!lesson){ host.innerHTML='<div class="card">이 과정에는 해당 차시가 없습니다.</div>'; return; }
-  if(!loggedIn()){ const c=el('div','card');
+  if(!loggedIn()&&!teacherOK()){ const c=el('div','card');
     c.innerHTML=`<h2>먼저 학번과 이름을 입력하세요</h2><p class="sub">내 답과 점수가 학번별로 저장됩니다. 입력하면 바로 ${L[1]}차시가 시작됩니다.</p>`;
     host.appendChild(c); loginForm(c, ()=>renderLesson(L)); return; }
+  if(!loggedIn()) host.appendChild(el('div','box warn','👩‍🏫 <b>교사 미리보기</b> — 학생 화면을 그대로 보여 줍니다. 풀어 볼 수 있지만 기록은 저장되지 않습니다.'));
   const PK=S.course+'_'+L;
   let idx = Math.min(S.pos[PK]||0, lesson.steps.length-1);
 
@@ -4413,15 +4460,16 @@ function renderLesson(L){
     const msg=el('div'); msg.style.cssText='font-size:13px;color:#d64550';
     const last=idx===lesson.steps.length-1;
     const next=el('button','btn big', last?'차시 마치고 점수 보기':'확인하고 다음 단계 →');
+    const goNext=()=>{ if(!last){ idx++; S.pos[PK]=idx; save(); show(); }
+      else { VIEW[PK]='res'; FIN[PK]=true; show(); }
+      window.scrollTo({top:0,behavior:'smooth'}); };
     next.onclick=()=>{
       const r=s.check();
       if(!r.ok){ msg.innerHTML='⚠ '+r.msg;
-        if(!confirm('⚠ '+String(r.msg).replace(/<[^>]+>/g,'')+'\n\n완료하지 않아도 넘어갈 수 있습니다. 이 단계는 [미완료]로 남고, 진행 점을 눌러 언제든 다시 할 수 있습니다.\n넘어갈까요?')) return;
-        S.skip[s.id]=true; save(); }
-      else { S.done[s.id]=true; delete S.skip[s.id]; save(); }
-      if(!last){ idx++; S.pos[PK]=idx; save(); show(); }
-      else { VIEW[PK]='res'; FIN[PK]=true; show(); }
-      window.scrollTo({top:0,behavior:'smooth'});
+        ask('⚠ '+String(r.msg).replace(/<[^>]+>/g,'')+'\n\n완료하지 않아도 넘어갈 수 있습니다. 이 단계는 [미완료]로 남고, 진행 점을 눌러 언제든 다시 할 수 있습니다.',
+          ()=>{ S.skip[s.id]=true; save(); goNext(); }, {yes:'그냥 넘어가기'});
+        return; }
+      S.done[s.id]=true; delete S.skip[s.id]; save(); goNext();
     };
     nb.appendChild(prev); nb.appendChild(msg); nb.appendChild(sp); nb.appendChild(next);
     card.appendChild(nb);
@@ -4430,20 +4478,75 @@ function renderLesson(L){
   show();
 }
 
-/* ========== 보고서 ========== */
+/* ========== 보고서 ==========
+   학생은 자기 보고서, 교사 모드에서는 [교사 자료]에 불러온 모든 학생의 보고서를 본다. */
 function buildReport(){
   const b=$('#repBody'); b.innerHTML='';
+  const ex=$('#expBtn'); if(ex) ex.style.display=(loggedIn()&&!teacherOK())?'':'none';
+  if(teacherOK()){ b.appendChild(teacherReport()); return; }          // 교사 모드 : 모든 학생의 보고서
   if(!loggedIn()){ b.appendChild(el('p',null,'<b>먼저 학번과 이름을 입력하세요.</b> 입력하면 여기에 내 답과 점수가 모입니다.')); loginForm(b, buildReport); return; }
-  const A=S.ans, set=curSet(), C=COURSES[S.course], esc=escH, sum=courseSummary(S.course,S);
+  b.appendChild(reportEl(S,false));
+}
+let repSel=null, repAll=false, repDetail=false;
+function writtenList(st, course){                 // 서술·활동 단계에서 학생이 쓴 내용만 모아 간단히
+  const set=lessonSet(course), out=[];
+  Object.keys(set).forEach(L=>set[L].steps.forEach(s=>{ if(KEY1[s.id]) return; const v=actAnswer(s.id,st); if(!v) return;
+    out.push(`<div style="margin:7px 0"><b>${L[1]}차시 ${s.id}</b> ${escH(s.title)}<div style="margin:2px 0 0 14px;white-space:pre-wrap;color:#334155">${escH(v)}</div></div>`); }));
+  return out.join('');
+}
+function teacherReport(){
+  const d=el('div');
+  const recs=DASH.slice();
+  if(loggedIn()&&!recs.some(r=>r.p.sid===S.sid)) recs.push({p:payloadOf(S), how:'local'});   // 이 컴퓨터에 접속해 있는 학생도 함께
+  recs.sort((a,b)=>String(a.p.course||'').localeCompare(String(b.p.course||''))||String(a.p.sid).localeCompare(String(b.p.sid),'ko',{numeric:true}));
+  if(!recs.length){ d.innerHTML='<div class="box warn"><b>불러온 학생 결과가 없습니다.</b> [교사 자료] 탭의 <b>학생 결과 모아 보기</b>에서 학생이 낸 결과 파일을 불러오거나 [이 컴퓨터에 저장된 학생 기록 불러오기]를 누르면, 여기에서 학생별 활동 보고서를 볼 수 있습니다.</div>';
+    const g=el('button','btn','교사 자료로 가기'); g.onclick=()=>go('teacher'); d.appendChild(g); return d; }
+  if(!repSel||!recs.some(r=>r.p.sid===repSel)) repSel=recs[0].p.sid;
+  const bar=el('div','noprint'); bar.style.margin='0 0 10px';
+  const sel=el('select'); sel.style.cssText='font-family:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;margin-right:8px';
+  recs.forEach(r=>{ const o=document.createElement('option'); o.value=r.p.sid;
+    o.textContent=`${r.p.sid} ${r.p.name} · ${(COURSES[r.p.course]||{}).name||''}`; if(r.p.sid===repSel) o.selected=true; sel.appendChild(o); });
+  sel.onchange=()=>{ repSel=sel.value; repAll=false; buildReport(); };
+  const b1=el('button','btn ghost sm', repAll?'한 학생만 보기':`모든 학생 보기 (${recs.length}명 · 인쇄용)`);
+  b1.onclick=()=>{ repAll=!repAll; buildReport(); };
+  bar.append(el('b',null,'학생 : '), sel, b1); d.appendChild(bar);
+  d.appendChild(el('p','hint',`불러온 학생 ${recs.length}명 · 학생이 저장한 결과 파일(또는 이 컴퓨터의 기록) 기준이며, 교사 화면에서는 모든 문항의 정답이 함께 보입니다.`));
+  (repAll?recs:recs.filter(r=>r.p.sid===repSel)).forEach((r,i)=>{
+    const w=el('div'); if(repAll&&i) w.style.cssText='page-break-before:always;border-top:2px solid var(--line);margin-top:26px;padding-top:14px';
+    w.appendChild(reportEl(Object.assign(blankS(), r.p.state||{}, {sid:r.p.sid, name:r.p.name, course:r.p.course}), true));
+    d.appendChild(w); });
+  return d;
+}
+function reportEl(st, teacher){
+  const b=el('div');
+  const A=st.ans||{}, course=st.course||'phys', set=lessonSet(course), C=COURSES[course], esc=escH, sum=courseSummary(course,st);
   b.innerHTML=`<h3 style="margin-top:0">정보 × 물리 융합수업 — 활동 보고서</h3>
-    <table><tr><th style="width:80px">학번</th><td>${esc(S.sid)}</td><th style="width:80px">이름</th><td>${esc(S.name)}</td>
+    <table><tr><th style="width:80px">학번</th><td>${esc(st.sid)}</td><th style="width:80px">이름</th><td>${esc(st.name)}</td>
       <th style="width:80px">과정</th><td><b style="color:${C.color}">${C.name}</b> (${C.subject})</td></tr>
     <tr><th>완료 단계</th><td><b>${sum.done} / ${sum.total}</b></td><th>전체 점수</th><td><b>${sum.avg}점</b></td><th>작성</th><td>${fmtT(Date.now())}</td></tr></table>
     <div class="tscroll"><table><tr><th>차시</th>${sum.Ls.map(L=>`<th style="text-align:center">${L[1]}</th>`).join('')}</tr>
       <tr><td>점수</td>${sum.ev.map(r=>`<td style="text-align:center">${r.score==null||!r.started?'—':`<b>${r.score}</b>`}</td>`).join('')}</tr>
       <tr><td>완료</td>${sum.ev.map(r=>`<td style="text-align:center">${r.done}/${r.total}</td>`).join('')}</tr></table></div>
     <p class="hint">전체 점수 = 자동 채점 문항이 있는 차시 점수의 평균 (시작하지 않은 차시 — 는 0점으로 셉니다). ${RULE1}</p>`;
-  sum.Ls.forEach(L=>{ b.appendChild(el('h4',null,set[L].title)); b.appendChild(resultsEl(S.course,L,S,false,{noRule:true})); });
+  const detail=!!teacher||repDetail;
+  if(!detail){                                    // 학생용 : 차시 점수 요약 + 내가 쓴 글 (문항별 표는 단추로)
+    let t=`<div class="tscroll"><table><tr><th style="width:56px">차시</th><th>주제</th><th style="width:64px">점수</th><th style="width:74px">완료 단계</th><th style="width:38%">채점 문항</th></tr>`;
+    sum.Ls.forEach((L,i)=>{ const r=evalLesson(course,L,st,false,false), c={o:0,p:0,x:0,n:0};
+      r.items.forEach(({e})=>{ if(!e.sub) c.n++; else if(e.s>=0.999) c.o++; else if(e.s<=0.001) c.x++; else c.p++; });
+      t+=`<tr><td><b>${L[1]}차시</b></td><td>${esc(set[L].title.replace(/^\d차시 · /,''))}</td>
+        <td style="text-align:center">${r.score==null||!r.started?'—':`<b>${r.score}</b>`}</td>
+        <td style="text-align:center">${r.done}/${r.total}</td>
+        <td class="hint">${r.G.length?`정답 ${c.o} · 부분 ${c.p} · 오답 ${c.x} · 미응답 ${c.n}`:'자동 채점 문항 없음'}</td></tr>`; });
+    const box=el('div'); box.innerHTML=t+'</table></div>'; b.appendChild(box);
+    const w=writtenList(st,course);
+    if(w){ const d=el('div'); d.innerHTML='<h4>내가 쓴 글과 활동 기록</h4><div class="rep" style="border:0;padding:0">'+w+'</div>'; b.appendChild(d); }
+    const more=el('button','btn ghost sm noprint','📋 문항별로 자세히 보기 (내 답과 정답)');
+    more.onclick=()=>{ repDetail=true; buildReport(); window.scrollTo({top:0,behavior:'smooth'}); };
+    b.appendChild(more);
+  } else {
+    if(!teacher){ const less=el('button','btn ghost sm noprint','← 간단히 보기'); less.onclick=()=>{ repDetail=false; buildReport(); window.scrollTo({top:0,behavior:'smooth'}); }; b.appendChild(less); }
+    sum.Ls.forEach(L=>{ b.appendChild(el('h4',null,set[L].title)); b.appendChild(resultsEl(course,L,st,!!teacher,{noRule:true})); });
+  }
 
   let h='';
   if(A['lastcode']) h+=`<h4>최종 작성 코드 (시뮬레이터)</h4>
@@ -4464,6 +4567,7 @@ function buildReport(){
     h+='</div>';
   }
   if(h){ const x=el('div'); x.innerHTML=h; b.appendChild(x); }
+  return b;
 }
 $('#mkrep').onclick=buildReport;
 
@@ -4474,36 +4578,48 @@ function loginForm(host, after){
     <label>이름<input class="txt" maxlength="20" autocomplete="off" placeholder="예: 홍길동"></label>`;
   const [i1,i2]=f.querySelectorAll('input'), b=el('button','btn big','시작하기 →'); f.appendChild(b);
   const msg=el('div','fb'); host.appendChild(f); host.appendChild(msg);
-  const sub=()=>{ const r=login(i1.value,i2.value);
-    if(r.err){ msg.className='fb show x'; msg.textContent=r.err; (r.f===2?i2:i1).focus(); return; }
-    if(r.cancel) return;
-    refreshAll(); after&&after(); };
+  const sub=()=>{ const r=login(i1.value, i2.value, ()=>{ refreshAll(); after&&after(); });
+    if(r.err){ msg.className='fb show x'; msg.textContent=r.err; (r.f===2?i2:i1).focus(); } };
   b.onclick=sub; [i1,i2].forEach(x=>x.addEventListener('keydown',e=>{ if(e.key==='Enter') sub(); }));
   return f;
 }
 function renderWho(){
   const w=$('#who'); w.innerHTML='';
-  if(!loggedIn()){ w.appendChild(el('span',null,'로그인 전')); return; }
+  if(teacherOK()){ w.appendChild(el('span','tbadge','👩‍🏫 교사'));
+    const t=el('button',null,'교사 모드 끝내기'); t.onclick=()=>teacherLock(); w.appendChild(t); }
+  if(!loggedIn()){ if(!teacherOK()) w.appendChild(el('span',null,'로그인 전')); return; }
   w.appendChild(el('span',null,`<b>${escH(S.sid)}</b> ${escH(S.name)}`));
   const b=el('button',null,'로그아웃'); b.title='다른 학생이 이 컴퓨터를 쓸 수 있도록 접속을 끝냅니다';
-  b.onclick=()=>{ if(confirm(LOGOUT_Q)) logout(); }; w.appendChild(b);
+  b.onclick=()=>logout(); w.appendChild(b);
 }
+/* 첫 화면 : 왼쪽 교사용 칸 · 오른쪽 학생용 칸 */
 function renderLogin(){
   const c=$('#loginCard'); if(!c) return; c.innerHTML='';
+  const g=el('div','logingrid'); c.appendChild(g);
+  const tp=el('div','tpanel'), sp=el('div','spanel'); g.append(tp,sp);
+  tp.appendChild(el('h3',null,'👩‍🏫 교사용'));
+  if(teacherOK()){
+    tp.appendChild(el('p','sub','교사로 접속했습니다. 위 <b>[교육과정] · [교사 자료]</b> 탭이 열려 있고, 학번 없이도 차시를 미리 볼 수 있습니다(미리 보기 기록은 저장되지 않음).'));
+    const b1=el('button','btn sm','교사 자료 · 학생 결과'); b1.onclick=()=>go('teacher');
+    const b2=el('button','btn ghost sm','교육과정'); b2.onclick=()=>go('curr');
+    const b3=el('button','btn ghost sm','교사 모드 끝내기'); b3.onclick=()=>teacherLock();
+    const bb=el('div','noprint'); bb.append(b1,b2,b3); tp.appendChild(bb); }
+  else { tp.appendChild(el('p','sub','교사 비밀번호를 넣으면 <b>[교육과정] · [교사 자료]</b>(학생 결과 모아 보기) 탭이 나타납니다. 학생 화면에는 두 탭이 보이지 않습니다.'));
+    teacherPwForm(tp); }
   if(!loggedIn()){
-    c.appendChild(el('h2',null,'학번과 이름을 입력하고 시작하세요'));
-    c.appendChild(el('p','sub','내 답과 점수는 <b>학번별로</b> 이 컴퓨터(브라우저)에 저장됩니다. 창을 닫았다가 같은 학번과 이름으로 다시 들어오면 이어서 할 수 있습니다.'));
-    loginForm(c); return; }
+    sp.appendChild(el('h3',null,'🎒 학생용 — 학번과 이름을 입력하고 시작하세요'));
+    sp.appendChild(el('p','sub','내 답과 점수는 <b>학번별로</b> 이 컴퓨터(브라우저)에 저장됩니다. 창을 닫았다가 같은 학번과 이름으로 다시 들어오면 이어서 할 수 있습니다.'));
+    loginForm(sp); return; }
   const sum=courseSummary(S.course,S), st=sum.ev.map((r,i)=>[sum.Ls[i],r]).filter(([,r])=>r.started&&r.score!=null);
-  c.appendChild(el('h2',null,`${escH(S.name)} 학생, 반갑습니다 👋`));
-  c.appendChild(el('p','sub',`학번 <b>${escH(S.sid)}</b> · ${COURSES[S.course].name} · 완료 <b>${sum.done} / ${sum.total}</b>단계`));
-  if(st.length) c.appendChild(el('div','chips',st.map(([L,r])=>`<span>${L[1]}차시 <b class="${scCls(r.score)}">${r.score}점</b></span>`).join('')));
+  sp.appendChild(el('h3',null,`${escH(S.name)} 학생, 반갑습니다 👋`));
+  sp.appendChild(el('p','sub',`학번 <b>${escH(S.sid)}</b> · ${COURSES[S.course].name} · 완료 <b>${sum.done} / ${sum.total}</b>단계`));
+  if(st.length) sp.appendChild(el('div','chips',st.map(([L,r])=>`<span>${L[1]}차시 <b class="${scCls(r.score)}">${r.score}점</b></span>`).join('')));
   const bar=el('div','noprint');
   const b1=el('button','btn','📊 내 점수표 · 보고서'); b1.onclick=()=>go('report');
   const b2=el('button','btn teal','📤 결과 파일 저장'); b2.onclick=exportResult;
-  const b3=el('button','btn ghost','다른 학생으로 접속 (로그아웃)'); b3.onclick=()=>{ if(confirm(LOGOUT_Q)) logout(); };
-  bar.append(b1,b2,b3); c.appendChild(bar);
-  c.appendChild(el('p','hint','수업을 마치면 [결과 파일 저장]을 눌러 만든 파일을 선생님이 안내한 곳에 제출하세요. 파일에는 학번 · 이름 · 답 · 점수가 들어 있습니다.'));
+  const b3=el('button','btn ghost','다른 학생으로 접속 (로그아웃)'); b3.onclick=()=>logout();
+  bar.append(b1,b2,b3); sp.appendChild(bar);
+  sp.appendChild(el('p','hint','수업을 마치면 [결과 파일 저장]을 눌러 만든 파일을 선생님이 안내한 곳에 제출하세요. 파일에는 학번 · 이름 · 답 · 점수가 들어 있습니다.'));
 }
 function refreshAll(){ renderWho(); renderLogin(); renderCoursePick(); renderCourseBox(); renderTeacher(); }
 
@@ -4516,11 +4632,11 @@ function download(name, text, type){
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },3000);
 }
 function exportResult(){
-  if(!loggedIn()){ alert('먼저 [시작하기] 탭에서 학번과 이름을 입력하세요.'); go('home'); return; }
+  if(!loggedIn()){ say('먼저 [시작하기] 탭에서 학번과 이름을 입력하세요.','bad'); go('home'); return; }
   save(); const p=payloadOf(S), f=Object.assign({},p,{sig:sha256hex(SIG1+JSON.stringify(p))});
   const nm=`정보물리융합수업1_${S.sid}_${S.name}.json`.replace(/[\\/:*?"<>|\s]+/g,'_');
   download(nm, JSON.stringify(f), 'application/json');
-  setTimeout(()=>alert(`결과 파일을 저장했습니다.\n파일 이름 : ${nm}\n\n브라우저의 [다운로드] 폴더에 있습니다. 선생님이 안내한 곳에 이 파일을 제출하세요.`),300);
+  say(`결과 파일을 저장했습니다 — ${nm}\n브라우저의 [다운로드] 폴더에 있습니다. 선생님이 안내한 곳에 이 파일을 제출하세요.`,'ok');
 }
 
 /* ========== SHA-256 (교사 비밀번호 확인 · 결과 파일 서명) ========== */
@@ -4556,24 +4672,34 @@ function pwHash(pw){ let h=sha256hex(TPW.s+pw); for(let i=0;i<TPW.n;i++) h=sha25
 const TKEY=KEY+'__t';
 const teacherOK=()=>SS.get(TKEY)==='1';
 let T_WRAP=null;
+const TEND_Q='교사 모드를 끝낼까요? [교육과정] · [교사 자료] 탭이 다시 숨겨집니다.';
+function teacherPwForm(host, big){
+  const row=el('div','loginf'), lab=el('label',null,'교사 비밀번호'), inp=el('input','txt');
+  inp.type='password'; inp.autocomplete='off'; inp.maxLength=40; lab.appendChild(inp); row.appendChild(lab);
+  const b=el('button','btn'+(big?' big':''),'교사로 접속'); row.appendChild(b); host.appendChild(row);
+  const msg=el('div','fb'); host.appendChild(msg);
+  const tryOpen=()=>{ const v=inp.value; if(!v) return; b.disabled=true;
+    setTimeout(()=>{ const ok=pwHash(v)===TPW.h; b.disabled=false; inp.value='';
+      if(ok){ SS.set(TKEY,'1'); setTeacherMode(); go('teacher'); }
+      else { msg.className='fb show x'; msg.textContent='비밀번호가 맞지 않습니다.'; inp.focus(); } },30); };
+  b.onclick=tryOpen; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') tryOpen(); });
+}
 function renderTeacherGate(){
   const sec=$('#teacher'), lock=$('#tLock'); if(!T_WRAP) T_WRAP=$('#tWrap');
   lock.innerHTML='';
   if(teacherOK()){ if(!T_WRAP.isConnected) sec.appendChild(T_WRAP); renderTeacher(); renderDash(); return; }
   if(T_WRAP.isConnected) T_WRAP.remove();
-  const c=el('div','card');
-  c.innerHTML='<h2>🔒 교사 전용</h2><p class="sub">교사 자료와 <b>학생 결과 모아 보기</b>는 선생님만 열 수 있습니다. 교사 비밀번호를 입력하세요.</p>';
-  const row=el('div','loginf'), lab=el('label',null,'교사 비밀번호'), inp=el('input','txt');
-  inp.type='password'; inp.autocomplete='off'; inp.maxLength=40; lab.appendChild(inp); row.appendChild(lab);
-  const b=el('button','btn big','열기'); row.appendChild(b); c.appendChild(row);
-  const msg=el('div','fb'); c.appendChild(msg);
-  const tryOpen=()=>{ const v=inp.value; if(!v) return; b.disabled=true;
-    setTimeout(()=>{ const ok=pwHash(v)===TPW.h; b.disabled=false; inp.value='';
-      if(ok){ SS.set(TKEY,'1'); renderTeacherGate(); } else { msg.className='fb show x'; msg.textContent='비밀번호가 맞지 않습니다.'; inp.focus(); } },30); };
-  b.onclick=tryOpen; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') tryOpen(); });
-  lock.appendChild(c);
+  const c=el('div','card'); c.innerHTML='<h2>🔒 교사 전용</h2><p class="sub">교사 자료와 <b>학생 결과 모아 보기</b>는 선생님만 열 수 있습니다.</p>';
+  teacherPwForm(c,true); lock.appendChild(c);
 }
-function teacherLock(){ SS.del(TKEY); renderTeacherGate(); window.scrollTo({top:0}); }
+function setTeacherMode(){                        // 교사 모드가 켜지거나 꺼질 때 화면을 맞춘다
+  document.body.classList.toggle('tmode', teacherOK());
+  renderTeacherGate(); renderWho(); renderLogin();
+  const on=$('section.tab.on'); if(!on) return;
+  if(!teacherOK()&&(on.id==='curr'||on.id==='teacher')) go('home');
+  else if(/^L[1-8]$/.test(on.id)) renderLesson(on.id);
+}
+function teacherLock(){ SS.del(TKEY); setTeacherMode(); window.scrollTo({top:0}); }
 
 /* ========== 교사 : 학생 결과 모아 보기 ==========
    학생이 저장한 결과 파일(.json)을 여러 개 불러와 이 컴퓨터(localStorage 'ipc_state_v2__dash')에 모아 둔다. 같은 학번은 더 나중에 저장한 파일로 바꾼다. */
@@ -4582,7 +4708,7 @@ let DASH=jparse(LS.get(DKEY),[]); if(!Array.isArray(DASH)) DASH=[];
 let dashCourse=null, dashSel=null, dashLesson='L1';
 const scCls=v=>v==null?'':v>=80?'hi':v>=50?'mid':'lo';
 function fmtT(t){ if(!t) return '—'; const d=new Date(t), p=n=>String(n).padStart(2,'0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
-function dashStore(){ if(!LS.set(DKEY, JSON.stringify(DASH))) alert('이 컴퓨터의 저장 공간이 부족해 목록을 저장하지 못했습니다. 이 창을 닫기 전까지만 유지됩니다.'); }
+function dashStore(){ if(!LS.set(DKEY, JSON.stringify(DASH))) say('이 컴퓨터의 저장 공간이 부족해 목록을 저장하지 못했습니다. 이 창을 닫기 전까지만 유지됩니다.','bad'); }
 function dashPut(p, how, file){ const r={p, how, file:file||''}, i=DASH.findIndex(x=>x.p.sid===p.sid);
   if(i<0) DASH.push(r); else if((p.savedAt||0)>=(DASH[i].p.savedAt||0)) DASH[i]=r; }
 function readResult(txt, name){
@@ -4593,9 +4719,9 @@ function readResult(txt, name){
 }
 function dashFiles(files){
   const list=[...(files||[])].filter(f=>/\.json$/i.test(f.name)||f.type==='application/json');
-  if(!list.length){ alert('.json 결과 파일을 골라 주세요.'); return; }
+  if(!list.length){ say('.json 결과 파일을 골라 주세요.','bad'); return; }
   let left=list.length; const errs=[];
-  const fin=()=>{ if(--left>0) return; dashStore(); renderDash(); if(errs.length) alert('불러오지 못한 파일\n'+errs.join('\n')); };
+  const fin=()=>{ if(--left>0) return; dashStore(); renderDash(); say(errs.length?'불러오지 못한 파일\n'+errs.join('\n'):`결과 파일 ${list.length-errs.length}개를 불러왔습니다.`, errs.length?'bad':'ok'); };
   list.forEach(fl=>{ const rd=new FileReader();
     rd.onload=()=>{ const e=readResult(String(rd.result), fl.name); if(e) errs.push(e); fin(); };
     rd.onerror=()=>{ errs.push(fl.name+' : 읽지 못했습니다'); fin(); };
@@ -4603,7 +4729,7 @@ function dashFiles(files){
 }
 function dashLocal(){ let n=0;
   LS.keys().filter(k=>k.startsWith(UKEY)).forEach(k=>{ const st=readUser(k.slice(UKEY.length)); if(st&&st.sid){ const p=payloadOf(st); p.savedAt=st.at||0; dashPut(p,'local'); n++; } });
-  dashStore(); renderDash(); alert(n?`이 컴퓨터에 저장된 학생 기록 ${n}명을 불러왔습니다.`:'이 컴퓨터에 저장된 학생 기록이 없습니다.'); }
+  dashStore(); renderDash(); say(n?`이 컴퓨터에 저장된 학생 기록 ${n}명을 불러왔습니다.`:'이 컴퓨터에 저장된 학생 기록이 없습니다.', n?'ok':'bad'); }
 const courseOf=p=>p.course==='info'?'info':'phys';
 function dashRows(course){ return DASH.filter(r=>courseOf(r.p)===course).sort((a,b)=>String(a.p.sid).localeCompare(String(b.p.sid),'ko',{numeric:true})); }
 const howTxt=h=>h==='ok'?'<span class="hi" title="앱이 만든 그대로의 결과 파일입니다">✔ 확인</span>'
@@ -4643,7 +4769,8 @@ function renderDash(){
     d.appendChild(el('h3',null,`${escH(r.p.sid)} ${escH(r.p.name)} — ${set[dashLesson].title} <span class="hint">· 저장 ${fmtT(r.p.savedAt)} · ${howTxt(r.how)}${r.file?' · '+escH(r.file):''}</span>`));
     d.appendChild(resultsEl(dashCourse, dashLesson, r.p.state, true));
     const rm=el('button','btn ghost sm noprint','이 학생을 목록에서 빼기');
-    rm.onclick=()=>{ if(confirm(`${r.p.sid} ${r.p.name} 학생을 목록에서 뺍니다. (학생 파일은 지워지지 않습니다)`)){ DASH=DASH.filter(x=>x!==r); dashSel=null; dashStore(); renderDash(); } };
+    rm.onclick=()=>ask(`${r.p.sid} ${r.p.name} 학생을 목록에서 뺍니다. (학생 파일은 지워지지 않습니다)`,
+      ()=>{ DASH=DASH.filter(x=>x!==r); dashSel=null; dashStore(); renderDash(); },{yes:'빼기'});
     d.appendChild(rm); box.appendChild(d); }
   /* 문항별 정답률 */
   box.appendChild(el('h3',null,`문항별 정답률 — ${set[dashLesson].title}`));
@@ -4664,7 +4791,7 @@ function itemStats(course, L, rows){
   return h+'</table>';
 }
 function dashCSV(){
-  if(!DASH.length){ alert('불러온 결과가 없습니다.'); return; }
+  if(!DASH.length){ say('불러온 결과가 없습니다.','bad'); return; }
   const course=dashCourse||'phys', Ls=Object.keys(lessonSet(course)), rows=dashRows(course);
   const q=v=>{ v=String(v==null?'':v); return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
   const out=[['학번','이름','과정',...Ls.map(L=>L[1]+'차시 점수'),...Ls.map(L=>`${L[1]}차시 완료 단계(총 ${lessonSet(course)[L].steps.length})`),'전체 점수','완료 단계','전체 단계','마지막 활동','저장 시각','파일 확인']];
@@ -4686,15 +4813,18 @@ function wireDash(){
   window.addEventListener('drop',e=>{ e.preventDefault(); if(teacherOK()&&$('#teacher').classList.contains('on')&&e.dataTransfer) dashFiles(e.dataTransfer.files); });
   $('#dashLocalB').onclick=dashLocal;
   $('#dashCsv').onclick=dashCSV;
-  $('#dashClear').onclick=()=>{ if(DASH.length&&confirm(`불러온 학생 결과 ${DASH.length}명을 목록에서 지웁니다. (학생 파일은 지워지지 않습니다)`)){ DASH=[]; dashSel=null; dashStore(); renderDash(); } };
-  $('#dashWipe').onclick=()=>{ const ks=LS.keys().filter(k=>k.startsWith(UKEY)); if(!ks.length){ alert('이 컴퓨터에 저장된 학생 기록이 없습니다.'); return; }
-    if(!confirm(`이 컴퓨터(브라우저)에 저장된 학생 기록 ${ks.length}명분을 모두 지웁니다.\n학기를 마친 공용 컴퓨터를 정리할 때 쓰세요. 되돌릴 수 없습니다. 계속할까요?`)) return;
-    ks.forEach(k=>LS.del(k)); LS.del(KEY); alert('지웠습니다.'); if(S.sid){ SS.del(CUR); location.reload(); } };
+  $('#dashClear').onclick=()=>{ if(!DASH.length) return;
+    ask(`불러온 학생 결과 ${DASH.length}명을 목록에서 지웁니다. (학생 파일은 지워지지 않습니다)`,
+      ()=>{ DASH=[]; dashSel=null; dashStore(); renderDash(); },{yes:'목록 비우기',danger:1}); };
+  $('#dashWipe').onclick=()=>{ const ks=LS.keys().filter(k=>k.startsWith(UKEY)); if(!ks.length){ say('이 컴퓨터에 저장된 학생 기록이 없습니다.'); return; }
+    ask(`이 컴퓨터(브라우저)에 저장된 학생 기록 ${ks.length}명분을 모두 지웁니다.\n학기를 마친 공용 컴퓨터를 정리할 때 쓰세요. 되돌릴 수 없습니다.`,
+      ()=>{ ks.forEach(k=>LS.del(k)); LS.del(KEY); if(S.sid){ SS.del(CUR); location.reload(); } else { say('지웠습니다.','ok'); renderDash(); } },{yes:'모두 지우기',danger:1}); };
 }
 
 /* ========== 시작 ========== */
 wireDash();                 // 교사 화면 단추 연결 (문서에서 빼기 전에)
-renderTeacherGate();        // 교사 화면 : 비밀번호를 넣기 전에는 문서에서 빼 둔다
+document.body.classList.toggle('tmode', teacherOK());
+renderTeacherGate();        // 교사 화면 : 교사 모드가 아니면 문서에서 빼 둔다
 renderWho();
 renderLogin();
 renderCoursePick();
